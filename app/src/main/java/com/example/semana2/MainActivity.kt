@@ -1,6 +1,7 @@
 package com.example.semana2
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -66,6 +68,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.android.gms.location.LocationServices
+import com.airbnb.lottie.compose.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,11 +80,35 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-val usuarios = listOf(
-    Pair("test1@test.com", "123456"),
-    Pair("test2@test.com", "123456"),
-    Pair("test3@test.com", "123456"),
+class Usuario(
+    val email: String,
+    val password: String,
+    val username: String
 )
+
+class Bus(
+    val id: String,
+    val llegada: String
+)
+
+fun verificarCampos(vararg campos: String, accion: () -> Unit) {
+    if (campos.all { it.isNotEmpty() }) {
+        accion()
+    } else {
+        throw IllegalArgumentException("Campos vacios")
+    }
+}
+
+fun Context.showToast(message: String) {
+    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+}
+
+val usuarios = mutableListOf(
+    Usuario("test1@test.com", "123456", "TestUser1"),
+    Usuario("test2@test.com", "123456", "TestUser2"),
+    Usuario("test3@test.com", "123456", "TestUser3"),
+)
+
 
 @Composable
 @Preview(showBackground = true)
@@ -138,7 +165,8 @@ fun Registro(navController: NavHostController) {
             label = { Text("Nombre") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
                 .semantics {
                     contentDescription = "Campo para ingresar su nombre"
                 },
@@ -150,7 +178,8 @@ fun Registro(navController: NavHostController) {
             label = { Text("Email") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
                 .semantics {
                     contentDescription = "Campo para ingresar el email de su cuenta"
                 },
@@ -162,7 +191,8 @@ fun Registro(navController: NavHostController) {
             label = { Text("Contraseña") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
                 .semantics {
                     contentDescription = "Campo para ingresar la contraseña de su cuenta"
                 },
@@ -170,31 +200,16 @@ fun Registro(navController: NavHostController) {
 
         Button(
             onClick = {
-                val existeUsuario = usuarios.any { it.first == email }
-                if (email.isNotEmpty() && password.isNotEmpty()) {
-                    if (!existeUsuario){
+                try {
+                    verificarCampos(email, password, username){
                         usuarios.plus(Pair(email, password))
-                        Toast.makeText(
-                            context,
-                            "Cuenta creada con exito",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }else{
-                        Toast.makeText(
-                            context,
-                            "Error al crear cuenta",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        context.showToast("Cuenta creada con éxito")
+                        navController.navigate("login")
                     }
-
-
-                } else {
-                    Toast.makeText(
-                        context,
-                        "Campos no pueden estar vacíos",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                } catch (e: Exception) {
+                    context.showToast("Error inesperado: ${e.message}")
                 }
+
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -226,10 +241,18 @@ fun Registro(navController: NavHostController) {
 
 @Composable
 fun Login(navController: NavHostController) {
+    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.bus))
     val context = LocalContext.current
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val logo: Painter = painterResource(id = R.drawable.bus)
+
+    val progress by animateLottieCompositionAsState(
+        composition = composition,
+        iterations = LottieConstants.IterateForever
+    )
+
+
     LaunchedEffect(Unit) {
         Toast.makeText(
             context,
@@ -237,6 +260,11 @@ fun Login(navController: NavHostController) {
             Toast.LENGTH_SHORT
         ).show()
     }
+    LottieAnimation(
+        composition = composition,
+        progress = { progress },
+        modifier = Modifier.fillMaxWidth().height(300.dp)
+    )
 
 
     Box(
@@ -248,18 +276,13 @@ fun Login(navController: NavHostController) {
     Column(
         modifier = Modifier
             .padding(50.dp)
-            .fillMaxSize(),
+            .fillMaxSize()
+            .offset(y = 50.dp),
         horizontalAlignment  = Alignment.CenterHorizontally,
         verticalArrangement  = Arrangement.Center
     ){
 
-        Image(
-            painter = logo,
-            contentDescription = "Bus Logo",
-            modifier = Modifier
-                .size(100.dp)
-                .padding(bottom = 16.dp)
-        )
+
 
         OutlinedTextField(
             value = email,
@@ -267,7 +290,8 @@ fun Login(navController: NavHostController) {
             label = { Text("Email") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
                 .semantics {
                     contentDescription = "Campo para ingresar el email de su cuenta"
                 },
@@ -279,7 +303,8 @@ fun Login(navController: NavHostController) {
             label = { Text("Contraseña") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
                 .semantics {
                     contentDescription = "Campo para ingresar la contraseña de su cuenta"
                 },
@@ -288,7 +313,9 @@ fun Login(navController: NavHostController) {
         Button(
             onClick = {
                 //navController.navigate("dashboard")
-                val usuarioValido = usuarios.any { it.first == email && it.second == password }
+                val usuarioValido = usuarios.any { usuario ->
+                    usuario.email == email && usuario.password == password
+                }
                 if (usuarioValido) {
                     navController.navigate("dashboard")
                 } else {
@@ -484,7 +511,8 @@ fun Principal(navController: NavHostController) {
                             label = { Text("Email") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
                                 .semantics {
                                     contentDescription = "Campo email de su cuenta"
                                 },
@@ -496,7 +524,8 @@ fun Principal(navController: NavHostController) {
                             label = { Text("Contraseña") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
                                 .semantics {
                                     contentDescription = "Campo contraseña de su cuenta"
                                 },
