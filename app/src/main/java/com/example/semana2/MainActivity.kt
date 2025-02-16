@@ -10,7 +10,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,20 +25,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,26 +49,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
 import com.google.android.gms.location.LocationServices
-import com.airbnb.lottie.compose.*
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.DatabaseReference
+import com.google.firebase.database.FirebaseDatabase
+import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,16 +85,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-class Usuario(
-    val email: String,
-    val password: String,
-    val username: String
-)
-
-class Bus(
-    val id: String,
-    val llegada: String
-)
 
 fun verificarCampos(vararg campos: String, accion: () -> Unit) {
     if (campos.all { it.isNotEmpty() }) {
@@ -102,12 +97,6 @@ fun verificarCampos(vararg campos: String, accion: () -> Unit) {
 fun Context.showToast(message: String) {
     Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 }
-
-val usuarios = mutableListOf(
-    Usuario("test1@test.com", "123456", "TestUser1"),
-    Usuario("test2@test.com", "123456", "TestUser2"),
-    Usuario("test3@test.com", "123456", "TestUser3"),
-)
 
 
 @Composable
@@ -126,8 +115,9 @@ fun Registro(navController: NavHostController) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
-    val logo: Painter = painterResource(id = R.drawable.bus)
     val context = LocalContext.current
+    val auth = FirebaseAuth.getInstance()
+    val database = FirebaseDatabase.getInstance().getReference("users")
 
     Box(
         modifier = Modifier
@@ -139,24 +129,15 @@ fun Registro(navController: NavHostController) {
         modifier = Modifier
             .padding(50.dp)
             .fillMaxSize(),
-        horizontalAlignment  = Alignment.CenterHorizontally,
-        verticalArrangement  = Arrangement.Center
-    ){
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
         Text(
-            modifier = Modifier.clickable {
-            },
+            modifier = Modifier.clickable { },
             color = MaterialTheme.colorScheme.onBackground,
             fontSize = 40.sp,
             text = "Crear cuenta",
             maxLines = 1
-        )
-
-        Image(
-            painter = logo,
-            contentDescription = "Bus Logo",
-            modifier = Modifier
-                .size(100.dp)
-                .padding(bottom = 16.dp)
         )
 
         OutlinedTextField(
@@ -200,22 +181,35 @@ fun Registro(navController: NavHostController) {
 
         Button(
             onClick = {
-                try {
-                    verificarCampos(email, password, username){
-                        usuarios.plus(Pair(email, password))
-                        context.showToast("Cuenta creada con éxito")
-                        navController.navigate("login")
-                    }
-                } catch (e: Exception) {
-                    context.showToast("Error inesperado: ${e.message}")
+                if (email.isNotEmpty() && password.length >= 6 && username.isNotEmpty()) {
+                    auth.createUserWithEmailAndPassword(email, password)
+                        .addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                val userId = auth.currentUser?.uid
+                                if (userId != null) {
+                                    val user = User(username, email, password)
+                                    database.child(userId).setValue(user)
+                                        .addOnSuccessListener {
+                                            Toast.makeText(context, "Cuenta creada con éxito", Toast.LENGTH_SHORT).show()
+                                            navController.navigate("login")
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Toast.makeText(context, "Error al guardar datos: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        }
+                                }
+                            } else {
+                                Toast.makeText(context, "Error: ${task.exception?.localizedMessage}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                } else {
+                    Toast.makeText(context, "Todos los campos son obligatorios", Toast.LENGTH_SHORT).show()
                 }
-
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(30.dp)
                 .semantics {
-                    contentDescription = "Boton para crear cuenta"
+                    contentDescription = "Botón para crear cuenta"
                 }
         ) {
             Text("Registrarse")
@@ -230,14 +224,9 @@ fun Registro(navController: NavHostController) {
             text = "Ingresar",
             maxLines = 1
         )
-
-
-
-
-
     }
 }
-
+data class User(val nombre: String, val email: String, val contrasena: String)
 
 @Composable
 fun Login(navController: NavHostController) {
@@ -246,6 +235,8 @@ fun Login(navController: NavHostController) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val logo: Painter = painterResource(id = R.drawable.bus)
+    val auth = FirebaseAuth.getInstance()
+    val database = FirebaseDatabase.getInstance().getReference("users")
 
     val progress by animateLottieCompositionAsState(
         composition = composition,
@@ -256,7 +247,7 @@ fun Login(navController: NavHostController) {
     LaunchedEffect(Unit) {
         Toast.makeText(
             context,
-            "USER PRUEBA test1@test.com 123456",
+            "USER PRUEBA test@test.com 123456",
             Toast.LENGTH_SHORT
         ).show()
     }
@@ -312,19 +303,30 @@ fun Login(navController: NavHostController) {
 
         Button(
             onClick = {
-                //navController.navigate("dashboard")
-                val usuarioValido = usuarios.any { usuario ->
-                    usuario.email == email && usuario.password == password
+                if (email.isNotEmpty() && password.isNotEmpty()){
+                    auth.signInWithEmailAndPassword(email, password)
+                        .addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                val userId = auth.currentUser?.uid
+                                if (userId != null) {
+                                    database.child(userId).get().addOnSuccessListener { snapshot ->
+                                        if (snapshot.exists()) {
+                                            val nombreUsuario = snapshot.child("nombre").value.toString()
+                                            Toast.makeText(context, "Bienvenido, $nombreUsuario", Toast.LENGTH_SHORT).show()
+                                            navController.navigate("dashboard")
+                                        } else {
+                                            Toast.makeText(context, "Usuario o contraseña invalido", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            } else {
+                                Toast.makeText(context, "Correo o contraseña incorrecta", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                }else{
+                    Toast.makeText(context, "Debe ingresar datos", Toast.LENGTH_SHORT).show()
                 }
-                if (usuarioValido) {
-                    navController.navigate("dashboard")
-                } else {
-                    Toast.makeText(
-                        context,
-                        "Correo o contraseña incorrecta",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -357,7 +359,30 @@ fun Principal(navController: NavHostController) {
     val items = listOf("Paradas Cercanas", "Mi Perfil")
     val selectedIcons = listOf(Icons.Filled.LocationOn, Icons.Filled.AccountCircle)
     val unselectedIcons = listOf(Icons.Outlined.LocationOn, Icons.Outlined.AccountCircle)
-    data class Bus(val id: String, val llegada: String)
+
+    data class Bus(val id: String, val llegada: Int, var ultimo_update: Int)
+    val database: DatabaseReference = FirebaseDatabase.getInstance().getReference("horario_buses")
+
+    //Actualizar los datos al iniciar, simula un servicio que actualiza los datos
+    val busesOrdenaditos = listOf(
+        Bus("JUGX35", Random.nextInt(1, 50), 1),
+        Bus("JUGX36", Random.nextInt(1, 50), 1),
+        Bus("JUGX37", Random.nextInt(1, 50), 1),
+        Bus("JUGX38", Random.nextInt(1, 50), 1)
+    ).sortedBy { it.llegada }
+
+
+    busesOrdenaditos.forEach { bus ->
+        database.child(bus.id).setValue(bus)
+            .addOnSuccessListener {
+                println("Actualizado en firebase")
+            }
+            .addOnFailureListener {
+                println("Error")
+            }
+    }
+
+
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
     LaunchedEffect(Unit) {
@@ -375,12 +400,6 @@ fun Principal(navController: NavHostController) {
         }
 
     }
-    val buses = listOf(
-        Bus("BUS 1", "10"),
-        Bus("BUS 2", "20"),
-        Bus("BUS 3", "25"),
-        Bus("BUS 4", "30")
-    )
 
 
     Scaffold(
@@ -432,7 +451,7 @@ fun Principal(navController: NavHostController) {
 
                         }
 
-                        itemsIndexed(buses) {index, bus ->
+                        itemsIndexed(busesOrdenaditos) {index, bus ->
                             var textoDescriptivo = "El ${bus.id}, llega en ${bus.llegada} minutos"
                             Card(
                                 modifier = Modifier
